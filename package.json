@@ -1,0 +1,16 @@
+{
+  "name": "my-champions-pack",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "init-pack": "node scripts/init-pack.mjs",
+    "validate": "mc-pack validate .",
+    "test": "mc-pack test .",
+    "build": "mc-pack build . --out build",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@champions-digital-game/mod-sdk": "latest",
+    "typescript": "^5.9.0"
+  }
+}
