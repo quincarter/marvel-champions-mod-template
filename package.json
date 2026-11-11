@@ -7,7 +7,9 @@
     "validate": "mc-pack validate .",
     "test": "mc-pack test .",
     "build": "mc-pack build . --out build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "describe": "node scripts/describe.mjs",
+    "agents:link": "node scripts/link-agents.mjs"
   },
   "devDependencies": {
     "@champions-digital-game/mod-sdk": "latest",

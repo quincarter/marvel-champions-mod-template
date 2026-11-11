@@ -26,7 +26,7 @@ if (!id || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(id)) {
   process.exit(2);
 }
 const OLD_ID = "sample-hero";
-const skip = new Set(["node_modules", ".git", "build", "scripts", ".github"]);
+const skip = new Set(["node_modules", ".git", "build", "scripts", ".github", "docs", ".agents", ".claude", ".codex", ".cache", ".drafts"]);
 const textFile = /\.(json|ts|md|svg)$/;
 
 function walk(dir) {

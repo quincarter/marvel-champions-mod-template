@@ -23,7 +23,9 @@ The store lists only approved packs. Approval happens in the registry repo,
    tags: [hero]
    ```
 
-   Get the full sha with `git rev-parse v1.0.0^{commit}`.
+   Get the full sha with `git rev-parse v1.0.0^{commit}`. `npm run describe` drafts this file for you into
+   `submission/<your-pack-id>.yaml`, and the `submit-pack` skill (`.agents/skills/submit-pack`) checks the tag, the
+   commit and the permission and prints the finished file.
 
 5. The registry's CI rebuilds your pack from that commit and checks that it matches your release. The maintainer
    reviews and plays it. Once it's merged, the pack appears in the Mod Store.

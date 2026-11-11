@@ -31,7 +31,14 @@ permission to share.
    npm test             # plays headless games with your precon
    ```
 
-5. Commit `package-lock.json`, push, and tag a release (`v0.1.0`) once CI passes. Then follow
+5. Draft the pack's metadata (`pack.json`, `CREDITS.md`, `PERMISSION.md`, the registry file) from your finished
+   cards, then fill the `TODO`s it lists:
+
+   ```bash
+   npm run describe
+   ```
+
+6. Commit `package-lock.json`, push, and tag a release (`v0.1.0`) once CI passes. Then follow
    [SUBMITTING.md](SUBMITTING.md).
 
 ## What's in a pack
@@ -46,6 +53,7 @@ permission to share.
 | `art/`                      | Full-bleed pictures, such as the hero select picture.                                            |
 | `CREDITS.md`                | Who made the pack, its art and any translations.                                                 |
 | `PERMISSION.md`             | Permission for the Mod Store to distribute the pack.                                             |
+| `AGENTS.md`, `.agents/`, `docs/` | Instructions, subagents, skills and guides for AI assistants and humans.                    |
 
 The sample, Sample Sentinel, shows one card of each kind. Each ability copies the shape of a base-game card whose
 script is known to work, named in a comment. [SAMPLE.md](SAMPLE.md) lists them.
@@ -55,7 +63,8 @@ script is known to work, named in a comment. [SAMPLE.md](SAMPLE.md) lists them.
 A pack ships data, never code. Your `abilities/index.ts` is run once when the pack is built, and its result is saved
 as JSON. The game only ever reads that JSON. So a card can only do what the game's engine already supports.
 
-- Find a base-game card that works like yours and copy the shape of its script. The game's
+- Start with [docs/recipes.md](docs/recipes.md): common card text already turned into scripts. Find a base-game card
+  that works like yours ([docs/finding-a-precedent.md](docs/finding-a-precedent.md)) and copy the shape of its script. The game's
   [card scripts](https://github.com/quincarter/marvel-champions-digital-game/tree/main/packages/cards/src) are the
   best reference.
 - `npm run validate` lists every engine feature the pack uses, and fails if one is unknown to the SDK's engine.
@@ -64,6 +73,34 @@ as JSON. The game only ever reads that JSON. So a card can only do what the game
 
 Already have cards in MarvelCDB's JSON format? `npx mc-pack import-marvelcdb <folder> --out .` converts them,
 renumbers the codes and writes an `abilities/index.ts` stub listing every ability still to script.
+
+## Guides
+
+Plain markdown, written to be read by an AI assistant as well as by you:
+
+| Guide | What it covers |
+| ----- | -------------- |
+| [docs/card-json.md](docs/card-json.md) | Every card field by type, required or optional, enums, code and id rules, an example per type. |
+| [docs/dsl-reference.md](docs/dsl-reference.md) | The ability DSL by group, with examples. [docs/dsl-reference-generated.md](docs/dsl-reference-generated.md) is the complete builder list, generated from the game's source. |
+| [docs/recipes.md](docs/recipes.md) | Common card text turned into scripts, each citing the base or community card it comes from. |
+| [docs/finding-a-precedent.md](docs/finding-a-precedent.md) | How to find a base-game card that does what yours does and read its script. |
+| [docs/validation-errors.md](docs/validation-errors.md) | Every message `validate`, `typecheck` and `test` print, and what to do. |
+| [docs/pack-metadata.md](docs/pack-metadata.md) | `pack.json`, credits, permission, the registry file, and how a community `mod.json` maps onto them. |
+
+`npm run describe` drafts the metadata from your cards (`--write` saves it). `AGENTS.md` tells an AI assistant how to
+work in this repo.
+
+## Working with an AI assistant
+
+`AGENTS.md` is the one set of instructions every tool reads (`CLAUDE.md`, `GEMINI.md` and
+`.github/copilot-instructions.md` link to it). `.agents/agents/` has small subagents (`card-transcriber`,
+`ability-scripter`, `pack-validator`, `pack-describer`, `rules-reader`) and `.agents/skills/` has skills that run a
+script first and use AI only for the rest, which saves tokens: `import-pack`, `transcribe-cards`, `find-precedent`,
+`script-card`, `validate-and-fix`, `describe-pack`, `submit-pack`. After cloning, `npm run agents:link` recreates the
+links where your system did not check them out as links (Windows without Developer Mode).
+
+The assistant never invents mechanics the engine lacks, never guesses unclear card text, and cites the base card each
+script copies; see `AGENTS.md`.
 
 ## Images
 
