@@ -128,7 +128,8 @@ schema in `packages/content/src/schema/cards/`, the DSL in `packages/cards/src/d
 - A script that names another card writes its exact printed name.
 - Traits are upper case in JSON and in queries.
 - Comments in scripts quote the card text and cite the base card copied; note a ruling or a reading the author chose.
-- Keep `package-lock.json` committed. Tag releases `v<version>` matching `pack.json`.
+- Keep `package-lock.json` committed: CI installs with `npm ci` and fails without it. The SDK is pinned to an exact
+  version; upgrade it only on purpose (README, "Upgrading the SDK"). Tag releases `v<version>` matching `pack.json`.
 - Do not commit `build/`, `.cache/`, `.drafts/` or `submission/` (git-ignored).
 
 ## Agent links on every system

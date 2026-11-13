@@ -11,10 +11,12 @@ permission to share.
 ## Quick start
 
 1. Click **Use this template** to make your own repo, then clone it.
-2. Install the SDK, which also gives you the `mc-pack` tool:
+2. Install the SDK, which also gives you the `mc-pack` tool, and commit the `package-lock.json` it writes (CI
+   installs with `npm ci`, and fails until the lockfile is committed):
 
    ```bash
    npm install
+   git add package-lock.json && git commit -m "Lock the SDK"
    ```
 
 3. Turn the sample into your pack:
@@ -38,8 +40,19 @@ permission to share.
    npm run describe
    ```
 
-6. Commit `package-lock.json`, push, and tag a release (`v0.1.0`) once CI passes. Then follow
-   [SUBMITTING.md](SUBMITTING.md).
+6. Push, and tag a release (`v0.1.0`) once CI passes. Then follow [SUBMITTING.md](SUBMITTING.md).
+
+## Upgrading the SDK
+
+`package.json` pins `@champions-digital-game/mod-sdk` to one exact version, and `package-lock.json` locks it and
+everything it pulls in, so every `npm ci` (yours and CI's) builds with the SDK you tested. Upgrade it on purpose,
+for example when a card needs an engine feature from a newer game release:
+
+```bash
+npm install @champions-digital-game/mod-sdk@<version>   # or @latest; .npmrc keeps the pin exact
+npm run validate && npm run typecheck && npm test
+git add package.json package-lock.json && git commit -m "SDK <version>"
+```
 
 ## What's in a pack
 

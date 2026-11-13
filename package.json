@@ -14,7 +14,7 @@
     "test:scripts": "node --test scripts/check-workflow-secrets.test.mjs"
   },
   "devDependencies": {
-    "@champions-digital-game/mod-sdk": "latest",
+    "@champions-digital-game/mod-sdk": "0.44.0",
     "typescript": "^5.9.0"
   }
 }

@@ -81,8 +81,8 @@ abilities: uses DSL feature "effect:resolveTagged", which this game version lack
 ```
 
 The pack uses a builder whose underlying engine feature the installed SDK (and so the game version it came from) does
-not support yet. Fix: update the SDK (`npm install @champions-digital-game/mod-sdk@latest`) and run `npm run validate`
-again. If it still fails, the game has not added that primitive: do not rewrite the card to something else without
+not support yet. Fix: update the SDK (`npm install @champions-digital-game/mod-sdk@latest`, which pins the new version
+in `package.json`), run `npm run validate` again, and commit `package.json` and `package-lock.json`. If it still fails, the game has not added that primitive: do not rewrite the card to something else without
 telling the author. Report it (see [AGENTS.md](../AGENTS.md)) and leave the ability unscripted for now.
 
 `pack.json requires.dslFeatures: must list exactly the features the abilities use: ...` means `pack.json` carries a stale
