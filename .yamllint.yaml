@@ -1,0 +1,16 @@
+# yamllint (https://yamllint.readthedocs.io), as the game repo runs it: uvx yamllint@1.38.0 --strict .
+extends: default
+
+ignore: |
+  node_modules/
+  build/
+
+rules:
+  # Long run lines and comments stay on one line.
+  line-length: disable
+  # Workflow files key on `on:`, which YAML 1.1 reads as a boolean.
+  truthy:
+    check-keys: false
+  document-start: disable
+  comments:
+    min-spaces-from-content: 1

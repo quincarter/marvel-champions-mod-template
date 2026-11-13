@@ -1,5 +1,10 @@
 # Checks the pack on every push and pull request, and on a v* tag builds it and attaches the zip and pack.json to a
 # release. The mod store's registry rebuilds the pack from the tagged commit and compares it with that zip.
+#
+# `mc-pack validate`, `test` and `build` run the pack's abilities/index.ts, so every job that runs them has a
+# read-only token, no persisted checkout credentials and no secrets. Only `release` can write, and it never checks
+# out, installs or runs the pack: it attaches the zip the `build` job uploaded. scripts/check-workflow-secrets.mjs
+# (the `workflows` job) fails CI if a change breaks that split.
 name: Pack
 
 on:
@@ -12,35 +17,142 @@ permissions:
   contents: read
 
 jobs:
-  check:
+  workflows:
+    name: Workflow safety
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: if [ -f package-lock.json ]; then npm ci --ignore-scripts; else npm install --ignore-scripts; fi
-      - run: npx --no-install mc-pack validate .
-      - run: npx --no-install tsc --noEmit
-      - run: npx --no-install mc-pack test .
+      - run: node scripts/check-workflow-secrets.mjs
+      - run: node --test scripts/check-workflow-secrets.test.mjs
 
-  release:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # npm ci installs exactly the SDK in package-lock.json. The template itself ships without one until the SDK is
+      # on npm (the `sample` job checks it instead); a pack made from it must commit its lockfile.
+      - name: Require package-lock.json
+        id: lock
+        run: |
+          if [ -f package-lock.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ "$GITHUB_REPOSITORY" = "quincarter/marvel-champions-mod-template" ]; then
+            echo "::notice::The template has no package-lock.json yet; the sample job checks the sample pack."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "::error::No package-lock.json. Run npm install once, commit the package-lock.json it writes, and push again: CI installs with npm ci so it checks the exact SDK you tested with."
+          exit 1
+      - if: steps.lock.outputs.present == 'true'
+        run: npm ci --ignore-scripts
+      - if: steps.lock.outputs.present == 'true'
+        run: npx --no-install mc-pack validate .
+      - if: steps.lock.outputs.present == 'true'
+        run: npx --no-install tsc --noEmit
+      - if: steps.lock.outputs.present == 'true'
+        run: npx --no-install mc-pack test .
+
+  # The template repo only: a clean clone of the sample pack installs the pinned SDK from npm and runs what a creator
+  # runs, then init-pack and validate again. It cannot pass until the SDK is published, so while npm answers 404 for
+  # the pinned version it skips with a notice.
+  sample:
+    name: Sample pack from a clean clone
+    if: github.repository == 'quincarter/marvel-champions-mod-template'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Is the pinned SDK on npm?
+        id: sdk
+        run: |
+          spec=$(node -p "const p=require('./package.json');'@champions-digital-game/mod-sdk@'+p.devDependencies['@champions-digital-game/mod-sdk']")
+          if npm view "$spec" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::$spec is not on npm yet, so the sample pack was not checked. This job passes once it is published."
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.sdk.outputs.published == 'true'
+        run: if [ -f package-lock.json ]; then npm ci --ignore-scripts; else npm install --ignore-scripts; fi
+      - if: steps.sdk.outputs.published == 'true'
+        run: |
+          npx --no-install mc-pack validate .
+          npx --no-install tsc --noEmit
+          npx --no-install mc-pack test .
+          npx --no-install mc-pack build . --out build
+      - if: steps.sdk.outputs.published == 'true'
+        name: init-pack, then validate the renamed pack
+        run: |
+          rm -rf build
+          node scripts/init-pack.mjs --id ci-hero --name "CI Hero" --author "CI"
+          npx --no-install mc-pack validate .
+          npx --no-install mc-pack test .
+
+  build:
+    name: Build the release zip
     needs: check
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: Require package-lock.json
+        run: |
+          [ -f package-lock.json ] || { echo "::error::Commit package-lock.json before tagging a release."; exit 1; }
       - run: npm ci --ignore-scripts
+      - run: npx --no-install mc-pack validate .
+      - run: npx --no-install mc-pack test .
       - run: npx --no-install mc-pack build . --out build
       - name: Check the tag matches pack.json's version
         run: |
-          version=$(node -p "require('./build/pack.json').version")
+          version=$(node -p "JSON.parse(require('fs').readFileSync('build/pack.json','utf8')).version")
           [ "v$version" = "${GITHUB_REF_NAME}" ] || { echo "::error::tag ${GITHUB_REF_NAME} but pack.json says $version"; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pack-release
+          path: |
+            build/*.zip
+            build/pack.json
+          if-no-files-found: error
+          retention-days: 7
+
+  # Attaches what `build` made. No checkout, no install, no pack code: the only job with a write token.
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pack-release
+          path: dist
       - env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" build/*.zip build/pack.json --title "$GITHUB_REF_NAME" --generate-notes
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release create "$GITHUB_REF_NAME" dist/*.zip dist/pack.json --title "$GITHUB_REF_NAME" --generate-notes
