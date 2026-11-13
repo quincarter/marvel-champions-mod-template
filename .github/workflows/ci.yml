@@ -50,7 +50,7 @@ jobs:
       # refs/heads/feature/custom-content-packs). Move it forward to test a newer SDK; delete it and the tarball steps
       # once the pinned version is published and package-lock.json is committed.
       GAME_REPO: quincarter/marvel-champions-digital-game
-      GAME_SHA: 1dfd389334220ac4eb70a4d4818d0ba39a4263e2
+      GAME_SHA: 98b15022ec6cb517237cecd431ba8fafc4be803a
     steps:
       - uses: actions/checkout@v4
         with:
