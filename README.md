@@ -4,6 +4,9 @@ Start here to make a custom content pack (a fan-made hero, and later scenarios a
 [Marvel Champions digital game](https://github.com/quincarter/marvel-champions-digital-game), and to submit it to the
 in-game **Mod Store**.
 
+> **New here? Follow [SUBMITTING.md](SUBMITTING.md).** It walks through every step, from "Use this template" to a
+> pack in the Mod Store, with the exact commands, a checklist before tagging, and fixes for common CI failures.
+
 This is a fan-made, non-commercial project. Marvel Champions, its card text, artwork and characters are the
 intellectual property of Fantasy Flight Games and Marvel. Only submit content you made, or have its creator's
 permission to share.
@@ -40,7 +43,11 @@ permission to share.
    npm run describe
    ```
 
-6. Push, and tag a release (`v0.1.0`) once CI passes. Then follow [SUBMITTING.md](SUBMITTING.md).
+6. Record the creator's permission in `pack.json` (`npm run describe` flags; [SUBMITTING.md](SUBMITTING.md), step 7). Packs without permission evidence are
+   never approved.
+7. Push, and once CI passes tag a release matching `pack.json`'s version (`git tag v0.1.0 && git push origin v0.1.0`).
+   CI attaches the zip to the release. Then open a pull request on the
+   [registry](https://github.com/quincarter/marvel-champions-mods): [SUBMITTING.md](SUBMITTING.md), steps 8 to 11.
 
 ## Upgrading the SDK
 
