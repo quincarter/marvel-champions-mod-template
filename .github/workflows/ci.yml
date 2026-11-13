@@ -218,18 +218,28 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # Attaches what `build` made. No checkout, no install, no pack code: the only job with a write token.
+  # Attaches what `build` made. No checkout, no install, no pack code: the only job with a write token. It runs
+  # scripts/release-assets.mjs as committed at the tagged commit (fetched through the API, never from the artifact the
+  # pack-code job uploaded). A rerun is safe: it creates the release only if it is missing, uploads only the files it
+  # lacks, skips a file already there with the same SHA-256 and fails rather than replace one that differs.
   release:
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
     steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
       - uses: actions/download-artifact@v4
         with:
           name: pack-release
           path: dist
-      - env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-        run: gh release create "$GITHUB_REF_NAME" dist/*.zip dist/pack.json --title "$GITHUB_REF_NAME" --generate-notes
+      - name: Fetch the release script from the tagged commit
+        run: |
+          gh api -H "Accept: application/vnd.github.raw" \
+            "repos/${GH_REPO}/contents/scripts/release-assets.mjs?ref=${GITHUB_SHA}" > "$RUNNER_TEMP/release-assets.mjs"
+      - run: node "$RUNNER_TEMP/release-assets.mjs" "$GITHUB_REF_NAME" dist
