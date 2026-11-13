@@ -18,8 +18,10 @@ ask for it instead of inventing it.
    translators, where the art comes from, who wrote the scripts) ask the creator in one short batch. Never invent
    permission, a date or evidence. If the creator is not the author of the cards, permission from the author is
    required: say so.
-4. Re-run with the answers as flags (`--creator`, `--permission-by`, `--permission-date`, `--permission-evidence`,
-   `--permission-scope`, `--template-credit`, `--translator es="Name"`, `--repo`, `--summary`), then `--write`.
+4. Re-run with the answers as flags (`--creator`, `--permission-status granted|pending`, `--permission-by`,
+   `--permission-date`, `--permission-evidence`, `--permission-scope`, `--permission-languages en,es`,
+   `--template-credit`, `--translator es="Name"`, `--repo`, `--summary`), then `--write`. Pass
+   `--permission-status granted` only when the creator says permission was given and you have the evidence.
 5. If there is a community `mod.json`, pass it with `--mod`; the mapping is in `docs/pack-metadata.md`.
 6. Proofread the generated `description` (the store shows it) and `CREDITS.md`; improve wording, keep facts.
 7. Run `npm run validate` and report any problem.

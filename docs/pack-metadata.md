@@ -18,12 +18,13 @@ folders, `art/`, the git remote and tags) and drafts everything it can. Whatever
 
 ```bash
 npm run describe -- --creator "Your Name" \
-  --permission-by "Your Name" --permission-date 2026-11-11 \
-  --permission-evidence "I made this pack myself" \
+  --permission-status granted --permission-by "Your Name" --permission-date 2026-11-11 \
+  --permission-evidence "I made this pack myself" --permission-scope inclusion --permission-languages en \
   --repo https://github.com/you/my-hero-pack --write
 ```
 
-Flags: `--creator`, `--permission-by`, `--permission-date YYYY-MM-DD`, `--permission-scope`, `--permission-evidence`,
+Flags: `--creator`, `--permission-status granted|pending`, `--permission-by`, `--permission-date YYYY-MM-DD`,
+`--permission-scope`, `--permission-evidence`, `--permission-languages en,es`, `--permission-note`,
 `--template-credit`, `--translator es="Name"` (repeatable), `--base-language`, `--text-language`, `--summary`, `--repo`,
 `--tag`, `--app`, `--mod path/to/mod.json`. Existing values in `pack.json` win; a TODO is never written into `pack.json`
 (the script refuses and says what is missing). `--write` keeps a `CREDITS.md` or `PERMISSION.md` you have already
@@ -41,7 +42,7 @@ The author-written part (the build adds `schema`, `contents`, `files`, `totalByt
 | ------------------------ | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
 | `id`                     | Lowercase letters, digits, single dashes; prefixes every card code. Must not change after release.      | From the existing `pack.json`.                                  |
 | `version`                | Semver. Bump it for every release; a published version is never replaced.                                | Existing, else `0.1.0`.                                         |
-| `kind`                   | `hero`, `scenario`, `modular`, `campaign` or `art`.                                                      | From the cards: a hero identity means `hero`; scenarios `scenario`; a campaign `campaign`; encounter sets only `modular`; only alternate art `art`. |
+| `kind`                   | `hero`, `scenario`, `modular`, `campaign` or `art` (`house-rule` is coming in a game release).                                                      | From the cards: a hero identity means `hero`; scenarios `scenario`; a campaign `campaign`; encounter sets only `modular`; only alternate art `art`. |
 | `name`                   | Display name.                                                                                            | Existing, else the first hero's name.                           |
 | `authors`                | A list of names.                                                                                         | `--creator`, else TODO.                                         |
 | `description`            | One or two sentences for the store (its first line is the default store summary).                         | A one-line draft; improve it.                                   |
@@ -50,7 +51,7 @@ The author-written part (the build adds `schema`, `contents`, `files`, `totalByt
 | `languages`              | `{ "base": "en", "available": ["en", "es"], "text": "en" }`. `base` is the fallback picture language; `available` has every `cards/<lang>/` folder; `text` is the language of the card records, only when it differs from `base`. | From the `cards/<lang>/` folders; `--base-language`, `--text-language`. |
 | `pictures`               | `{ "hero": { "<identity code>": "art/hero.webp" } }`: the hero select picture.                            | From `art/hero.*`.                                              |
 | `altArt`                 | `{ "en": { "01088": "alt-art/en/01088.webp" } }`: alternate art for base cards or your own.               | From `alt-art/<lang>/<code>.webp`.                              |
-| `permission`             | `{ "by", "evidence", "date", "scope" }`: who allowed the store to distribute it, proof, when, how far.    | Flags, or `mod.json`.                                           |
+| `permission`             | `{ "status", "by", "date", "evidence", "scope", "languages", "note" }`: whether it is `granted` or `pending`, who allowed the store to distribute it, when, the proof, how far, which languages it covers (the original and each translation), and while pending what is missing. A `granted` one needs all but `note`. The store takes only `granted`, with `languages` covering every language in `languages.available` (`npx mc-pack validate . --publish`). | Flags, or `mod.json`. Never assumed. |
 | `templateCredit`         | The card template's creator (for example `Hitch`).                                                        | `--template-credit` or `mod.json` `template`.                   |
 | `translators`            | `{ "es": "Name" }`.                                                                                       | `--translator` or `mod.json` `languages`.                       |
 
