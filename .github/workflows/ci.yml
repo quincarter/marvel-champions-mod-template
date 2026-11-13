@@ -30,9 +30,82 @@ jobs:
         with:
           node-version: 24
       - run: node scripts/check-workflow-secrets.mjs
-      - run: node --test scripts/check-workflow-secrets.test.mjs
+      - run: node --test scripts/*.test.mjs
+
+  # Where `check` and `sample` get the SDK. A pack (any repo made from the template) installs it from npm with its
+  # committed package-lock.json. The template repo checks its sample pack against the version package.json pins: from
+  # npm once that version is published, and until then from a tarball built here from the game repo, so CI always
+  # runs the real pipeline. scripts/sdk-on-npm.mjs tells a clean 404 (not published) from a network or auth error,
+  # which fails this job rather than skip the checks.
+  sdk:
+    name: Mod SDK source
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      source: ${{ steps.source.outputs.source }}
+    env:
+      # TEMPORARY, until the SDK is on npm: the game repo's feature/custom-content-packs branch, pinned to a commit so
+      # CI is reproducible (resolved 2026-11-13 with git ls-remote https://github.com/quincarter/marvel-champions-digital-game
+      # refs/heads/feature/custom-content-packs). Move it forward to test a newer SDK; delete it and the tarball steps
+      # once the pinned version is published and package-lock.json is committed.
+      GAME_REPO: quincarter/marvel-champions-digital-game
+      GAME_SHA: 1dfd389334220ac4eb70a4d4818d0ba39a4263e2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: npm or a tarball?
+        id: source
+        run: |
+          if [ "$GITHUB_REPOSITORY" != "quincarter/marvel-champions-mod-template" ]; then
+            echo "source=npm" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          state=$(node scripts/sdk-on-npm.mjs)
+          if [ "$state" = "published" ]; then
+            echo "source=npm" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::The pinned SDK is not on npm yet, so CI builds it from ${GAME_REPO}@${GAME_SHA}."
+            echo "source=tarball" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.source.outputs.source == 'tarball'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GAME_REPO }}
+          ref: ${{ env.GAME_SHA }}
+          path: game
+          persist-credentials: false
+      - if: steps.source.outputs.source == 'tarball'
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: game/package.json
+      - if: steps.source.outputs.source == 'tarball'
+        working-directory: game
+        run: pnpm install --frozen-lockfile
+      # Built at the version package.json pins, so the tarball stands in for exactly that npm release.
+      - if: steps.source.outputs.source == 'tarball'
+        name: Build the SDK tarball
+        working-directory: game
+        run: |
+          MC_SDK_VERSION=$(node -p "require('../package.json').devDependencies['@champions-digital-game/mod-sdk']")
+          export MC_SDK_VERSION
+          pnpm --filter @mc/mod-sdk build:dist
+          mkdir -p ../sdk-tarball
+          cp packages/mod-sdk/dist-npm/*.tgz ../sdk-tarball/
+      - if: steps.source.outputs.source == 'tarball'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mod-sdk-tarball
+          path: sdk-tarball/*.tgz
+          if-no-files-found: error
+          retention-days: 7
 
   check:
+    needs: sdk
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -43,33 +116,34 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      # npm ci installs exactly the SDK in package-lock.json. The template itself ships without one until the SDK is
-      # on npm (the `sample` job checks it instead); a pack made from it must commit its lockfile.
-      - name: Require package-lock.json
-        id: lock
+      - if: needs.sdk.outputs.source == 'tarball'
+        uses: actions/download-artifact@v4
+        with:
+          name: mod-sdk-tarball
+          path: ${{ runner.temp }}/mod-sdk
+      # npm ci installs exactly the SDK in package-lock.json, so a pack must commit its lockfile. Only the template,
+      # while its pinned SDK is unpublished, installs the tarball the sdk job built instead.
+      - name: Install
+        env:
+          SOURCE: ${{ needs.sdk.outputs.source }}
         run: |
-          if [ -f package-lock.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-          if [ "$GITHUB_REPOSITORY" = "quincarter/marvel-champions-mod-template" ]; then
-            echo "::notice::The template has no package-lock.json yet; the sample job checks the sample pack."
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            exit 0
+          if [ "$SOURCE" = "tarball" ]; then
+            npm install --ignore-scripts --no-save "$RUNNER_TEMP"/mod-sdk/*.tgz
+          elif [ -f package-lock.json ]; then
+            npm ci --ignore-scripts
+          else
+            echo "::error::No package-lock.json. Run npm install once, commit the package-lock.json it writes, and push again: CI installs with npm ci so it checks the exact SDK you tested with."
+            exit 1
           fi
-          echo "::error::No package-lock.json. Run npm install once, commit the package-lock.json it writes, and push again: CI installs with npm ci so it checks the exact SDK you tested with."
-          exit 1
-      - if: steps.lock.outputs.present == 'true'
-        run: npm ci --ignore-scripts
-      - if: steps.lock.outputs.present == 'true'
-        run: npx --no-install mc-pack validate .
-      - if: steps.lock.outputs.present == 'true'
-        run: npx --no-install tsc --noEmit
-      - if: steps.lock.outputs.present == 'true'
-        run: npx --no-install mc-pack test .
+      - run: npx --no-install mc-pack validate .
+      - run: npx --no-install tsc --noEmit
+      - run: npx --no-install mc-pack test .
 
-  # The template repo only: a clean clone of the sample pack installs the pinned SDK from npm and runs what a creator
-  # runs, then init-pack and validate again. It cannot pass until the SDK is published, so while npm answers 404 for
-  # the pinned version it skips with a notice.
+  # The template repo only: a clean clone of the sample pack runs what a creator runs and builds it, then init-pack,
+  # validate and test again. Its SDK comes from the sdk job: npm and the lockfile, or the tarball built from the game.
   sample:
     name: Sample pack from a clean clone
+    needs: sdk
     if: github.repository == 'quincarter/marvel-champions-mod-template'
     runs-on: ubuntu-latest
     permissions:
@@ -81,26 +155,29 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Is the pinned SDK on npm?
-        id: sdk
+      - if: needs.sdk.outputs.source == 'tarball'
+        uses: actions/download-artifact@v4
+        with:
+          name: mod-sdk-tarball
+          path: ${{ runner.temp }}/mod-sdk
+      - name: Install
+        env:
+          SOURCE: ${{ needs.sdk.outputs.source }}
         run: |
-          spec=$(node -p "const p=require('./package.json');'@champions-digital-game/mod-sdk@'+p.devDependencies['@champions-digital-game/mod-sdk']")
-          if npm view "$spec" version >/dev/null 2>&1; then
-            echo "published=true" >> "$GITHUB_OUTPUT"
+          if [ "$SOURCE" = "tarball" ]; then
+            npm install --ignore-scripts --no-save "$RUNNER_TEMP"/mod-sdk/*.tgz
+          elif [ -f package-lock.json ]; then
+            npm ci --ignore-scripts
           else
-            echo "::notice::$spec is not on npm yet, so the sample pack was not checked. This job passes once it is published."
-            echo "published=false" >> "$GITHUB_OUTPUT"
+            echo "::error::The pinned SDK is on npm: run npm install, commit the package-lock.json it writes, and push again."
+            exit 1
           fi
-      - if: steps.sdk.outputs.published == 'true'
-        run: if [ -f package-lock.json ]; then npm ci --ignore-scripts; else npm install --ignore-scripts; fi
-      - if: steps.sdk.outputs.published == 'true'
-        run: |
+      - run: |
           npx --no-install mc-pack validate .
           npx --no-install tsc --noEmit
           npx --no-install mc-pack test .
           npx --no-install mc-pack build . --out build
-      - if: steps.sdk.outputs.published == 'true'
-        name: init-pack, then validate the renamed pack
+      - name: init-pack, then validate the renamed pack
         run: |
           rm -rf build
           node scripts/init-pack.mjs --id ci-hero --name "CI Hero" --author "CI"

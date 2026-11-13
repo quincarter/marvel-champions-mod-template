@@ -11,7 +11,7 @@
     "describe": "node scripts/describe.mjs",
     "agents:link": "node scripts/link-agents.mjs",
     "check:workflows": "node scripts/check-workflow-secrets.mjs",
-    "test:scripts": "node --test scripts/check-workflow-secrets.test.mjs"
+    "test:scripts": "node --test \"scripts/*.test.mjs\""
   },
   "devDependencies": {
     "@champions-digital-game/mod-sdk": "0.44.0",
