@@ -6,11 +6,16 @@
 //
 // Checks, in order:
 //   - pack.json has no TODO and a semver version; CREDITS.md and PERMISSION.md exist with no TODO;
-//   - pack.json's permission is granted, with by, date, evidence, scope and languages, and the languages cover every
-//     language in languages.available (the same rule as `mc-pack validate --publish`); there is no DRAFT file;
+//   - pack.json's permission, by the SDK's rules (@champions-digital-game/mod-sdk: validatePack's permission checks
+//     and publishIssues, which `mc-pack validate --publish` runs): the block is there; `by` is filled; `status` is
+//     `granted`; a granted one has `date` (YYYY-MM-DD), `evidence`, `scope` and `languages`; and `languages` covers
+//     every language in `languages.available`. These are repeated here for plain messages; the SDK decides (below);
+//   - there is no DRAFT file (`mc-pack validate --publish` skips the permission check for a DRAFT folder, and the
+//     registry refuses one, so this script refuses it first);
 //   - the git tree is clean, `origin` is a GitHub repo, the tag v<version> exists locally and on origin and points at
 //     HEAD;
 //   - when the GitHub CLI (`gh`) is installed and signed in (`gh auth status`): the tag's release carries <id>-<version>.zip;
+//   - `mc-pack validate . --publish` passes: the registry runs the same command on the tagged commit;
 //   - `mc-pack build` succeeds (its zip sha256 is printed).
 // Then prints packs/<id>.yaml and writes it to submission/<id>.yaml (git-ignored). Exit 0 when ready, 1 with a list of
 // what is missing. It never opens a pull request: that waits for the creator's go-ahead (SKILL.md).
@@ -54,24 +59,33 @@ for (const file of ["CREDITS.md", "PERMISSION.md"]) {
 }
 if (existsSync("DRAFT")) bad("there is a DRAFT file: the pack is marked not ready to publish; delete it when it is");
 
+// The SDK's rules (validate.ts: checkCredits and publishIssues), so the creator sees every gap at once.
 const permission = pack.permission ?? {};
 if (!pack.permission) bad("pack.json has no permission block: record who allows the store to distribute the pack (npm run describe -- --permission-by ...)");
 else {
+  const filled = (v) => typeof v === "string" && v.trim() !== "";
+  if (!filled(permission.by)) bad("pack.json permission.by is empty: who gave permission");
   if (permission.status !== "granted")
     bad(`pack.json permission.status is ${permission.status ?? "missing"}, not granted${permission.note ? ` (${permission.note})` : ""}: packs without granted permission are never approved`);
-  for (const field of ["by", "date", "evidence", "scope"]) {
-    if (typeof permission[field] !== "string" || permission[field].trim() === "") bad(`pack.json permission.${field} is empty`);
+  else {
+    for (const field of ["date", "evidence", "scope"]) {
+      if (!filled(permission[field])) bad(`pack.json permission.${field} is empty: a granted permission needs it`);
+    }
+    if (!Array.isArray(permission.languages)) bad("pack.json permission.languages is missing: list the languages the permission covers");
   }
-  if (permission.date && !/^\d{4}-\d{2}-\d{2}$/.test(permission.date)) bad(`pack.json permission.date "${permission.date}" is not YYYY-MM-DD`);
-  const covered = Array.isArray(permission.languages) ? permission.languages : [];
-  if (!Array.isArray(permission.languages)) bad("pack.json permission.languages is missing: list the languages the permission covers");
-  const uncovered = (pack.languages?.available ?? []).filter((l) => !covered.includes(l));
-  if (uncovered.length > 0) bad(`pack.json permission.languages does not cover ${uncovered.join(", ")}: a translation needs the creator's permission too`);
+  if (filled(permission.date) && !/^\d{4}-\d{2}-\d{2}$/.test(permission.date)) bad(`pack.json permission.date "${permission.date}" is not YYYY-MM-DD`);
+  if (permission.status === "granted") {
+    const covered = Array.isArray(permission.languages) ? permission.languages : [];
+    const uncovered = (pack.languages?.available ?? []).filter((l) => !covered.includes(l));
+    if (uncovered.length > 0) bad(`pack.json permission.languages does not cover ${uncovered.join(", ")}: a translation needs the creator's permission too`);
+  }
 }
 
 // ---- git: clean tree, origin, tag -----------------------------------------------------------------------------------
 if (git("status", "--porcelain")) bad("the git tree has uncommitted changes: commit them, then tag");
-const remote = git("remote", "get-url", "origin")
+// The URL as configured (not rewritten by any url.<base>.insteadOf): it is what the registry file records. CI's
+// submit contract test relies on this to stand a local repo in for GitHub.
+const remote = git("config", "--get", "remote.origin.url")
   .replace(/^git@github\.com:/, "https://github.com/")
   .replace(/^ssh:\/\/git@github\.com\//, "https://github.com/")
   .replace(/\.git$/, "");
@@ -96,7 +110,13 @@ if (commit && remote && exec("gh", "auth", "status") !== undefined) {
   else if (!assets.split("\n").includes(zipName)) bad(`the ${tag} release has no ${zipName}: the registry downloads it and compares it with its own build`);
 } else if (commit && remote) notes.push(`gh is not installed or not signed in: check by hand that the ${tag} release on GitHub has ${zipName}`);
 
-// ---- build ---------------------------------------------------------------------------------------------------------
+// ---- the SDK's publish check, then the build -----------------------------------------------------------------------
+// The registry runs `mc-pack validate . --publish` on the tagged commit; this is that check, from the SDK the pack's
+// package-lock.json pins. A DRAFT folder was refused above, so the permission part is never skipped here.
+const validated = run("mc-pack", ["validate", ".", "--publish"]);
+if (validated.status !== 0)
+  bad(`mc-pack validate . --publish failed:\n${(validated.stdout + validated.stderr).trim().split("\n").slice(0, 12).join("\n")}`);
+
 let zipLine = "";
 if (!argv.includes("--skip-build")) {
   const built = run("mc-pack", ["build", ".", "--out", "build"]);

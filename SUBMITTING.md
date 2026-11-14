@@ -205,8 +205,10 @@ Check it the way the store will:
 npx mc-pack validate . --publish
 ```
 
-It fails unless `status` is `granted` and `languages` covers every shipped language. (If it answers
-`unknown option --publish`, your SDK predates that check; the submit script in step 9 checks the same rule.)
+It fails unless `status` is `granted`, a granted permission has `by`, `date`, `evidence`, `scope` and `languages`,
+and `languages` covers every shipped language. The registry runs the same command on your tagged commit. In a folder
+with a `DRAFT` file it skips the permission check, but a `DRAFT` pack is never submitted: the submit script in step 9
+and the registry both refuse it.
 
 Never fill these fields with permission nobody gave. A maintainer reads the evidence before approving, and a pack
 without it is closed, not merged.
@@ -233,8 +235,7 @@ git commit -m "Metadata and permission"
 2. Go through this checklist:
 
    - [ ] `npm run validate`, `npm run typecheck`, `npm test` and `npm run build` pass locally.
-   - [ ] `npx mc-pack validate . --publish` passes (or, on an older SDK, the permission block is `granted` with
-         every field filled).
+   - [ ] `npx mc-pack validate . --publish` passes.
    - [ ] `package-lock.json` is committed.
    - [ ] `pack.json` has no `TODO`; `CREDITS.md` and `PERMISSION.md` have no `TODO` line.
    - [ ] `pack.json`'s `version` is a version you have never released (the first release can stay `0.1.0`, or
@@ -260,9 +261,9 @@ version and tag again.
 
 ## 9. Open the registry pull request
 
-1. Write the registry file. The submit script checks everything that can be checked (no TODOs, permission granted
-   and covering every language, clean tree, tag on origin pointing at `HEAD`, the release has the zip, the build
-   passes) and writes `submission/<pack-id>.yaml`:
+1. Write the registry file. The submit script checks everything that can be checked (no TODOs, no `DRAFT` file,
+   permission granted and covering every language, clean tree, tag on origin pointing at `HEAD`, the release has the
+   zip, `mc-pack validate . --publish` and the build pass) and writes `submission/<pack-id>.yaml`:
 
    ```bash
    node .agents/skills/submit-pack/scripts/submit.mjs --tags hero,justice --summary "One line for the store list"

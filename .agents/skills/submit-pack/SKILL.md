@@ -21,12 +21,16 @@ node .agents/skills/submit-pack/scripts/submit.mjs --skip-build    # faster, whe
 
 - `pack.json` has no `TODO`, a semver `version`, and an id other than `sample-hero`; `CREDITS.md` and `PERMISSION.md`
   exist with no `TODO`; there is no `DRAFT` file;
-- `pack.json` `permission`: `status` is `granted`; `by`, `date` (YYYY-MM-DD), `evidence` and `scope` are filled;
-  `languages` covers every language in `languages.available` (the rule `mc-pack validate --publish` applies);
+- `pack.json` `permission`, by the SDK's own rules (`mc-pack validate --publish`): `by` is filled; `status` is
+  `granted`; a granted one has `date` (YYYY-MM-DD), `evidence`, `scope` and `languages`; `languages` covers every
+  language in `languages.available`;
 - the git tree is clean; `origin` is a `https://github.com/<owner>/<repo>` repo; the tag `v<version>` exists locally
   and on origin, points at `HEAD`, and was not moved;
 - if `gh` is signed in: the tag's GitHub release carries `<id>-<version>.zip` (otherwise it prints a note to check by
   hand);
+- `mc-pack validate . --publish` passes: the command the registry runs on the tagged commit, from the SDK the
+  pack's `package-lock.json` pins (it skips the permission check in a folder with a `DRAFT` file, which is why the
+  script refuses a `DRAFT` first);
 - `mc-pack build` succeeds (it prints the zip's sha256).
 
 It exits 1 with a list of problems, or prints `Ready`, writes `submission/<id>.yaml` (git-ignored) and prints it. The
