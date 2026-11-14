@@ -10,7 +10,8 @@
  *   - a draft left by an interrupted create is published once every file is on it.
  *
  * Uses the gh CLI with GH_TOKEN and GH_REPO from the environment. Node built-ins only: the release job runs this
- * without installing anything.
+ * without installing anything. It runs as the composite action in this folder (action.yml), which every pack's release
+ * job pins to a full commit SHA of the template repo; scripts/release-assets.test.mjs tests it.
  *
  * Usage: node release-assets.mjs <tag> <dir>   (dir holds the build's *.zip and pack.json)
  */

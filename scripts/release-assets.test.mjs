@@ -1,11 +1,12 @@
-// node --test scripts/release-assets.test.mjs (npm run test:scripts). The release job can be rerun: it creates a
-// missing release, uploads missing files, skips identical ones and refuses to replace a different one.
+// node --test scripts/release-assets.test.mjs (npm run test:scripts), on the release action's script in
+// .github/actions/release-assets. The release job can be rerun: it creates a missing release, uploads missing files,
+// skips identical ones and refuses to replace a different one.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, describe, it } from "node:test";
-import { attach, releaseFiles, viewRelease } from "./release-assets.mjs";
+import { attach, releaseFiles, viewRelease } from "../.github/actions/release-assets/release-assets.mjs";
 
 const TAG = "v1.0.0";
 const ZIP = "sample-hero-1.0.0.zip";

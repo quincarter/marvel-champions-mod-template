@@ -1,0 +1,36 @@
+# Attaches a built pack (its zip and pack.json) to the GitHub release for a tag. The `release` job of every pack's
+# Pack workflow runs this action from the template repo, pinned to a full commit SHA:
+#
+#   uses: quincarter/marvel-champions-mod-template/.github/actions/release-assets@<full sha>
+#
+# so the code that holds the write token is this reviewed copy, never a script from the tag being released (a pull
+# request to the pack can change anything in the pack repo, its scripts included). A pack repo made from the template
+# carries a copy of this folder, which nothing in it runs. Rerunning is safe: release-assets.mjs creates the release only
+# if it is missing, uploads only the files it lacks, skips one already there with the same SHA-256 and fails rather than
+# replace one that differs. Node built-ins and the runner's gh CLI only: nothing is installed.
+name: Attach a pack release
+description: Create or finish the GitHub release for a pack's tag with its zip and pack.json, idempotently.
+inputs:
+  tag:
+    description: The tag to release, such as v1.0.0.
+    required: true
+  dir:
+    description: The folder holding the build's one *.zip and pack.json.
+    required: true
+  token:
+    description: A token with contents write on the repository.
+    required: true
+  repository:
+    description: owner/repo of the release.
+    required: false
+    default: ${{ github.repository }}
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        GH_REPO: ${{ inputs.repository }}
+        TAG: ${{ inputs.tag }}
+        DIR: ${{ inputs.dir }}
+      run: node "$GITHUB_ACTION_PATH/release-assets.mjs" "$TAG" "$DIR"
