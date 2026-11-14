@@ -3,8 +3,9 @@
 #
 # `mc-pack validate`, `test` and `build` run the pack's abilities/index.ts, so every job that runs them has a
 # read-only token, no persisted checkout credentials and no secrets. Only `release` can write, and it never checks
-# out, installs or runs the pack: it attaches the zip the `build` job uploaded. scripts/check-workflow-secrets.mjs
-# (the `workflows` job) fails CI if a change breaks that split.
+# out, installs or runs the pack or any script from it: it attaches the zip the `build` job uploaded with the template
+# repo's release-assets action, pinned to a full commit SHA. scripts/check-workflow-secrets.mjs (the `workflows` job)
+# fails CI if a change breaks that split.
 name: Pack
 
 on:
@@ -218,18 +219,18 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # Attaches what `build` made. No checkout, no install, no pack code: the only job with a write token. It runs
-  # scripts/release-assets.mjs as committed at the tagged commit (fetched through the API, never from the artifact the
-  # pack-code job uploaded). A rerun is safe: it creates the release only if it is missing, uploads only the files it
-  # lacks, skips a file already there with the same SHA-256 and fails rather than replace one that differs.
+  # Attaches what `build` made. No checkout, no install, no pack code: the only job with a write token. The code that
+  # holds the token is the template repo's release-assets action pinned to a full commit SHA, never a script from the
+  # tag being released (a pull request to the pack can change any script in this repo). Move the pin forward only to a
+  # reviewed commit of quincarter/marvel-champions-mod-template; scripts/check-workflow-secrets.mjs fails a privileged
+  # job that runs a repo script or an action not pinned to a full SHA. A rerun is safe: the action creates the release
+  # only if it is missing, uploads only the files it lacks, skips a file already there with the same SHA-256 and fails
+  # rather than replace one that differs.
   release:
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      GH_REPO: ${{ github.repository }}
     steps:
       - uses: actions/setup-node@v4
         with:
@@ -238,8 +239,8 @@ jobs:
         with:
           name: pack-release
           path: dist
-      - name: Fetch the release script from the tagged commit
-        run: |
-          gh api -H "Accept: application/vnd.github.raw" \
-            "repos/${GH_REPO}/contents/scripts/release-assets.mjs?ref=${GITHUB_SHA}" > "$RUNNER_TEMP/release-assets.mjs"
-      - run: node "$RUNNER_TEMP/release-assets.mjs" "$GITHUB_REF_NAME" dist
+      - uses: quincarter/marvel-champions-mod-template/.github/actions/release-assets@dae244b073b415e22a26ff6ee4f5f1a73dfde843
+        with:
+          tag: ${{ github.ref_name }}
+          dir: dist
+          token: ${{ secrets.GITHUB_TOKEN }}
