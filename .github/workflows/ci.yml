@@ -201,7 +201,7 @@ jobs:
       # The registry's build-entry.sh with `mc-pack validate --publish` and the DRAFT refusal: registry PR #2's branch
       # feature/review-fixes, pinned (resolved 2026-11-14). Move it to the registry's main once that PR merges.
       REGISTRY_REPO: quincarter/marvel-champions-mods
-      REGISTRY_SHA: 353e9ec681a8813fbb1e665f2c4d3ba031df23d4
+      REGISTRY_SHA: 8df86738cdf39b34b2032094ddef79658fedc943
     steps:
       - uses: actions/checkout@v4
         with:
