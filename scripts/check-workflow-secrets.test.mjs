@@ -20,8 +20,8 @@ describe("this repo's workflows", () => {
     );
   });
 
-  it("run pack code in check, sample and build, never in release", () => {
-    assert.deepEqual(byFile["ci.yml"].packCodeJobs, ["check", "sample", "build"]);
+  it("run pack code in check, sample, submit-contract and build, never in release", () => {
+    assert.deepEqual(byFile["ci.yml"].packCodeJobs, ["check", "sample", "submit-contract", "build"]);
   });
 });
 

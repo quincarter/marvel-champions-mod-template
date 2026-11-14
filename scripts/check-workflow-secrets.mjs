@@ -19,8 +19,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-/** What marks a job as running pack code: the SDK's CLI, and the npm scripts that call it. */
-export const PACK_CODE = /\bmc-pack\b|\bnpm\s+(run\s+)?(validate|test|build|init-pack)(?![\w:-])/;
+/** What marks a job as running pack code: the SDK's CLI, and the npm scripts and repo scripts that call it. */
+export const PACK_CODE =
+  /\bmc-pack\b|\bnpm\s+(run\s+)?(validate|test|build|init-pack)(?![\w:-])|\bsubmit-contract\.sh\b|\bsubmit-pack\/scripts\/submit\.mjs\b/;
 const INSTALL = /\b(pnpm|npm|yarn)\s+(install|ci|i)\b/;
 /** A secret or the job's token, inside a `${{ }}` expression (so a file name like check-workflow-secrets.mjs is not). */
 const SECRET = /\$\{\{[^}]*\b(secrets\.|github\.token\b)/;

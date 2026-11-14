@@ -185,6 +185,50 @@ jobs:
           npx --no-install mc-pack validate .
           npx --no-install mc-pack test .
 
+  # The template repo only: the submission contract across the three repos, with the exact SDK tarball creators get
+  # (scripts/submit-contract.sh). A clean copy of the sample, made into a pack with init-pack and given a pending,
+  # then a granted, permission fixture, goes through the submit-pack script and `mc-pack validate . --publish`, then
+  # the registry's own scripts/build-entry.sh builds the submission file from the tagged commit and compares zips. Git
+  # is pointed at a local repo standing in for GitHub; no token is used.
+  submit-contract:
+    name: Submission contract (template, SDK, registry)
+    needs: sdk
+    if: github.repository == 'quincarter/marvel-champions-mod-template'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      # The registry's build-entry.sh with `mc-pack validate --publish` and the DRAFT refusal: registry PR #2's branch
+      # feature/review-fixes, pinned (resolved 2026-11-14). Move it to the registry's main once that PR merges.
+      REGISTRY_REPO: quincarter/marvel-champions-mods
+      REGISTRY_SHA: c14e30f03877b26542b41d17ffd5a622e08c7eed
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.REGISTRY_REPO }}
+          ref: ${{ env.REGISTRY_SHA }}
+          path: registry
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - if: needs.sdk.outputs.source == 'tarball'
+        uses: actions/download-artifact@v4
+        with:
+          name: mod-sdk-tarball
+          path: ${{ runner.temp }}/mod-sdk
+      # Once the pinned SDK is on npm, the tarball is npm's own.
+      - if: needs.sdk.outputs.source == 'npm'
+        run: |
+          mkdir -p "$RUNNER_TEMP/mod-sdk"
+          version=$(node -p "require('./package.json').devDependencies['@champions-digital-game/mod-sdk']")
+          npm pack "@champions-digital-game/mod-sdk@$version" --pack-destination "$RUNNER_TEMP/mod-sdk"
+      - name: Template, SDK and registry
+        run: REGISTRY_DIR=registry bash scripts/submit-contract.sh "$RUNNER_TEMP"/mod-sdk/*.tgz
+
   build:
     name: Build the release zip
     needs: check
