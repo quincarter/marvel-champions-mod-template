@@ -81,8 +81,8 @@ abilities: uses DSL feature "effect:resolveTagged", which this game version lack
 ```
 
 The pack uses a builder whose underlying engine feature the installed SDK (and so the game version it came from) does
-not support yet. Fix: update the SDK (`npm install @champions-digital-game/mod-sdk@latest`) and run `npm run validate`
-again. If it still fails, the game has not added that primitive: do not rewrite the card to something else without
+not support yet. Fix: update the SDK (`npm install @champions-digital-game/mod-sdk@latest`, which pins the new version
+in `package.json`), run `npm run validate` again, and commit `package.json` and `package-lock.json`. If it still fails, the game has not added that primitive: do not rewrite the card to something else without
 telling the author. Report it (see [AGENTS.md](../AGENTS.md)) and leave the ability unscripted for now.
 
 `pack.json requires.dslFeatures: must list exactly the features the abilities use: ...` means `pack.json` carries a stale
@@ -113,7 +113,10 @@ feature list. Delete the `requires.dslFeatures` line from your `pack.json`: the 
 | `pack.json kind: must be one of hero, scenario, modular, campaign, art`                  | Pick one.                                                                                        |
 | `pack.json authors: must list at least one author`, `name`/`description`/`license: must be a non-empty string` | Fill them (`npm run describe` drafts them: see [pack-metadata.md](pack-metadata.md)). |
 | `pack.json requires.app: must be a semver range`                                         | For example `">=0.1.0"`.                                                                         |
-| `pack.json permission.by: must say who gave permission`, `permission.date: must be YYYY-MM-DD` | Fix the permission block, or remove it until you know the values. Evidence goes in the registry file and `PERMISSION.md`. |
+| `pack.json permission.by: must say who gave permission`, `permission.date: must be YYYY-MM-DD` | Fix the permission block, or remove it until you know the values. Evidence also goes in the registry file and `PERMISSION.md`. |
+| `pack.json permission.status: must be one of ...`, `permission.<field>: is required when the status is granted` | `status` is `granted` or `pending`. A granted permission needs `date`, `evidence`, `scope` and `languages` (`npm run describe` flags, [pack-metadata.md](pack-metadata.md)). |
+| `pack.json permission: is required to publish`, `permission.status: is pending, not granted, so the pack is not published` (`validate --publish`) | The store takes only packs whose creator granted permission. Record the grant, or wait for it. Never fill in permission nobody gave. |
+| `pack.json permission.languages: does not cover <lang>: a translation needs the creator's permission too` (`validate --publish`) | Add the language once the creator allows it, or remove that language's pictures. |
 | `CREDITS.md: required file is missing` / `is empty` (same for `PERMISSION.md`)           | Both files are required and must not be empty.                                                   |
 | `pack.json pictures.<role>.<code>: "<path>" is not a listed file`                        | The art file named in `pictures` does not exist in the repo (`art/hero.webp`). Add it or fix the path. |
 | `pack.json languages.base: must be one of the available languages`, `languages.available: must list language tags such as "en"` | Language tags are `en`, `es`, ...; `base` must be in `available`. |

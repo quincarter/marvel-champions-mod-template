@@ -9,10 +9,12 @@
     "build": "mc-pack build . --out build",
     "typecheck": "tsc --noEmit",
     "describe": "node scripts/describe.mjs",
-    "agents:link": "node scripts/link-agents.mjs"
+    "agents:link": "node scripts/link-agents.mjs",
+    "check:workflows": "node scripts/check-workflow-secrets.mjs",
+    "test:scripts": "node --test \"scripts/*.test.mjs\""
   },
   "devDependencies": {
-    "@champions-digital-game/mod-sdk": "latest",
+    "@champions-digital-game/mod-sdk": "0.44.0",
     "typescript": "^5.9.0"
   }
 }

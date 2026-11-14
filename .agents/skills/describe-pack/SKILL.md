@@ -16,8 +16,8 @@ node .agents/skills/describe-pack/scripts/describe.mjs --full    # also print th
 ```
 
 It prints what was found (cards by type, heroes, decks, scenarios, picture languages, a `mod.json` if present) and the
-TODOs: creator, permission (who, date, evidence, scope), template credit, translators, `requires.app`, the registry
-repo and commit.
+TODOs: creator, permission (status, who, date, evidence, scope, languages), template credit, translators,
+`requires.app`, the registry repo and commit.
 
 ## 2. What you do after
 
@@ -26,12 +26,15 @@ repo and commit.
 2. Re-run with the answers as flags, then write:
 
 ```bash
-node .agents/skills/describe-pack/scripts/describe.mjs --creator "Name" --permission-by "Name" \
-  --permission-date 2026-11-11 --permission-evidence "https://..." --template-credit "Hitch" \
+node .agents/skills/describe-pack/scripts/describe.mjs --creator "Name" --permission-status granted \
+  --permission-by "Name" --permission-date 2026-11-11 --permission-evidence "https://..." \
+  --permission-scope "inclusion and translation" --permission-languages en,es --template-credit "Hitch" \
   --translator es="Name" --repo https://github.com/you/pack --write
 ```
 
    (`--mod path/to/mod.json` reads a community `mod.json`; the field mapping is in `docs/pack-metadata.md`.)
+   `--permission-status granted` only when the creator told you permission was given and gave you the evidence;
+   otherwise `--permission-status pending --permission-note "what is missing"`, and the pack is not submitted.
 3. Proofread the generated `description` (it is the store's text) and `CREDITS.md`; improve wording, keep facts.
    Replace any remaining `TODO:` in `CREDITS.md` (where the art comes from, who wrote the scripts) with the creator's
    answers.

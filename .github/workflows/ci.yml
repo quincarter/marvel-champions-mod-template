@@ -1,5 +1,11 @@
 # Checks the pack on every push and pull request, and on a v* tag builds it and attaches the zip and pack.json to a
 # release. The mod store's registry rebuilds the pack from the tagged commit and compares it with that zip.
+#
+# `mc-pack validate`, `test` and `build` run the pack's abilities/index.ts, so every job that runs them has a
+# read-only token, no persisted checkout credentials and no secrets. Only `release` can write, and it never checks
+# out, installs or runs the pack or any script from it: it attaches the zip the `build` job uploaded with the template
+# repo's release-assets action, pinned to a full commit SHA. scripts/check-workflow-secrets.mjs (the `workflows` job)
+# fails CI if a change breaks that split.
 name: Pack
 
 on:
@@ -12,35 +18,273 @@ permissions:
   contents: read
 
 jobs:
-  check:
+  workflows:
+    name: Workflow safety
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: if [ -f package-lock.json ]; then npm ci --ignore-scripts; else npm install --ignore-scripts; fi
+      - run: node scripts/check-workflow-secrets.mjs
+      - run: node --test scripts/*.test.mjs
+
+  # Where `check` and `sample` get the SDK. A pack (any repo made from the template) installs it from npm with its
+  # committed package-lock.json. The template repo checks its sample pack against the version package.json pins: from
+  # npm once that version is published, and until then from a tarball built here from the game repo, so CI always
+  # runs the real pipeline. scripts/sdk-on-npm.mjs tells a clean 404 (not published) from a network or auth error,
+  # which fails this job rather than skip the checks.
+  sdk:
+    name: Mod SDK source
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      source: ${{ steps.source.outputs.source }}
+    env:
+      # TEMPORARY, until the SDK is on npm: the game repo's feature/custom-content-packs branch, pinned to a commit so
+      # CI is reproducible (resolved 2026-11-13 with git ls-remote https://github.com/quincarter/marvel-champions-digital-game
+      # refs/heads/feature/custom-content-packs). Move it forward to test a newer SDK; delete it and the tarball steps
+      # once the pinned version is published and package-lock.json is committed.
+      GAME_REPO: quincarter/marvel-champions-digital-game
+      GAME_SHA: 98b15022ec6cb517237cecd431ba8fafc4be803a
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: npm or a tarball?
+        id: source
+        run: |
+          if [ "$GITHUB_REPOSITORY" != "quincarter/marvel-champions-mod-template" ]; then
+            echo "source=npm" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          state=$(node scripts/sdk-on-npm.mjs)
+          if [ "$state" = "published" ]; then
+            echo "source=npm" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::The pinned SDK is not on npm yet, so CI builds it from ${GAME_REPO}@${GAME_SHA}."
+            echo "source=tarball" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.source.outputs.source == 'tarball'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GAME_REPO }}
+          ref: ${{ env.GAME_SHA }}
+          path: game
+          persist-credentials: false
+      - if: steps.source.outputs.source == 'tarball'
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: game/package.json
+      - if: steps.source.outputs.source == 'tarball'
+        working-directory: game
+        run: pnpm install --frozen-lockfile
+      # Built at the version package.json pins, so the tarball stands in for exactly that npm release.
+      - if: steps.source.outputs.source == 'tarball'
+        name: Build the SDK tarball
+        working-directory: game
+        run: |
+          MC_SDK_VERSION=$(node -p "require('../package.json').devDependencies['@champions-digital-game/mod-sdk']")
+          export MC_SDK_VERSION
+          pnpm --filter @mc/mod-sdk build:dist
+          mkdir -p ../sdk-tarball
+          cp packages/mod-sdk/dist-npm/*.tgz ../sdk-tarball/
+      - if: steps.source.outputs.source == 'tarball'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mod-sdk-tarball
+          path: sdk-tarball/*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  check:
+    needs: sdk
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - if: needs.sdk.outputs.source == 'tarball'
+        uses: actions/download-artifact@v4
+        with:
+          name: mod-sdk-tarball
+          path: ${{ runner.temp }}/mod-sdk
+      # npm ci installs exactly the SDK in package-lock.json, so a pack must commit its lockfile. Only the template,
+      # while its pinned SDK is unpublished, installs the tarball the sdk job built instead.
+      - name: Install
+        env:
+          SOURCE: ${{ needs.sdk.outputs.source }}
+        run: |
+          if [ "$SOURCE" = "tarball" ]; then
+            npm install --ignore-scripts --no-save "$RUNNER_TEMP"/mod-sdk/*.tgz
+          elif [ -f package-lock.json ]; then
+            npm ci --ignore-scripts
+          else
+            echo "::error::No package-lock.json. Run npm install once, commit the package-lock.json it writes, and push again: CI installs with npm ci so it checks the exact SDK you tested with."
+            exit 1
+          fi
       - run: npx --no-install mc-pack validate .
       - run: npx --no-install tsc --noEmit
       - run: npx --no-install mc-pack test .
 
-  release:
+  # The template repo only: a clean clone of the sample pack runs what a creator runs and builds it, then init-pack,
+  # validate and test again. Its SDK comes from the sdk job: npm and the lockfile, or the tarball built from the game.
+  sample:
+    name: Sample pack from a clean clone
+    needs: sdk
+    if: github.repository == 'quincarter/marvel-champions-mod-template'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - if: needs.sdk.outputs.source == 'tarball'
+        uses: actions/download-artifact@v4
+        with:
+          name: mod-sdk-tarball
+          path: ${{ runner.temp }}/mod-sdk
+      - name: Install
+        env:
+          SOURCE: ${{ needs.sdk.outputs.source }}
+        run: |
+          if [ "$SOURCE" = "tarball" ]; then
+            npm install --ignore-scripts --no-save "$RUNNER_TEMP"/mod-sdk/*.tgz
+          elif [ -f package-lock.json ]; then
+            npm ci --ignore-scripts
+          else
+            echo "::error::The pinned SDK is on npm: run npm install, commit the package-lock.json it writes, and push again."
+            exit 1
+          fi
+      - run: |
+          npx --no-install mc-pack validate .
+          npx --no-install tsc --noEmit
+          npx --no-install mc-pack test .
+          npx --no-install mc-pack build . --out build
+      - name: init-pack, then validate the renamed pack
+        run: |
+          rm -rf build
+          node scripts/init-pack.mjs --id ci-hero --name "CI Hero" --author "CI"
+          npx --no-install mc-pack validate .
+          npx --no-install mc-pack test .
+
+  # The template repo only: the submission contract across the three repos, with the exact SDK tarball creators get
+  # (scripts/submit-contract.sh). A clean copy of the sample, made into a pack with init-pack and given a pending,
+  # then a granted, permission fixture, goes through the submit-pack script and `mc-pack validate . --publish`, then
+  # the registry's own scripts/build-entry.sh builds the submission file from the tagged commit and compares zips. Git
+  # is pointed at a local repo standing in for GitHub; no token is used.
+  submit-contract:
+    name: Submission contract (template, SDK, registry)
+    needs: sdk
+    if: github.repository == 'quincarter/marvel-champions-mod-template'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      # The registry's build-entry.sh with `mc-pack validate --publish` and the DRAFT refusal: registry PR #2's branch
+      # feature/review-fixes, pinned (resolved 2026-11-14). Move it to the registry's main once that PR merges.
+      REGISTRY_REPO: quincarter/marvel-champions-mods
+      REGISTRY_SHA: 353e9ec681a8813fbb1e665f2c4d3ba031df23d4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.REGISTRY_REPO }}
+          ref: ${{ env.REGISTRY_SHA }}
+          path: registry
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - if: needs.sdk.outputs.source == 'tarball'
+        uses: actions/download-artifact@v4
+        with:
+          name: mod-sdk-tarball
+          path: ${{ runner.temp }}/mod-sdk
+      # Once the pinned SDK is on npm, the tarball is npm's own.
+      - if: needs.sdk.outputs.source == 'npm'
+        run: |
+          mkdir -p "$RUNNER_TEMP/mod-sdk"
+          version=$(node -p "require('./package.json').devDependencies['@champions-digital-game/mod-sdk']")
+          npm pack "@champions-digital-game/mod-sdk@$version" --pack-destination "$RUNNER_TEMP/mod-sdk"
+      - name: Template, SDK and registry
+        run: REGISTRY_DIR=registry bash scripts/submit-contract.sh "$RUNNER_TEMP"/mod-sdk/*.tgz
+
+  build:
+    name: Build the release zip
     needs: check
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: Require package-lock.json
+        run: |
+          [ -f package-lock.json ] || { echo "::error::Commit package-lock.json before tagging a release."; exit 1; }
       - run: npm ci --ignore-scripts
+      - run: npx --no-install mc-pack validate .
+      - run: npx --no-install mc-pack test .
       - run: npx --no-install mc-pack build . --out build
       - name: Check the tag matches pack.json's version
         run: |
-          version=$(node -p "require('./build/pack.json').version")
+          version=$(node -p "JSON.parse(require('fs').readFileSync('build/pack.json','utf8')).version")
           [ "v$version" = "${GITHUB_REF_NAME}" ] || { echo "::error::tag ${GITHUB_REF_NAME} but pack.json says $version"; exit 1; }
-      - env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" build/*.zip build/pack.json --title "$GITHUB_REF_NAME" --generate-notes
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pack-release
+          path: |
+            build/*.zip
+            build/pack.json
+          if-no-files-found: error
+          retention-days: 7
+
+  # Attaches what `build` made. No checkout, no install, no pack code: the only job with a write token. The code that
+  # holds the token is the template repo's release-assets action pinned to a full commit SHA, never a script from the
+  # tag being released (a pull request to the pack can change any script in this repo). Move the pin forward only to a
+  # reviewed commit of quincarter/marvel-champions-mod-template; scripts/check-workflow-secrets.mjs fails a privileged
+  # job that runs a repo script or an action not pinned to a full SHA. A rerun is safe: the action creates the release
+  # only if it is missing, uploads only the files it lacks, skips a file already there with the same SHA-256 and fails
+  # rather than replace one that differs.
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          name: pack-release
+          path: dist
+      - uses: quincarter/marvel-champions-mod-template/.github/actions/release-assets@dae244b073b415e22a26ff6ee4f5f1a73dfde843
+        with:
+          tag: ${{ github.ref_name }}
+          dir: dist
+          token: ${{ secrets.GITHUB_TOKEN }}

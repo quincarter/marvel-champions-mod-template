@@ -8,7 +8,8 @@
 //
 // Fill the TODOs with flags instead of editing by hand:
 //   --creator "Name"  --permission-by "Name"  --permission-evidence "https://..."  --permission-date 2026-11-05
-//   --permission-scope "inclusion and translation"  --template-credit "Hitch"  --translator es="Name"
+//   --permission-scope "inclusion and translation"  --permission-status granted|pending
+//   --permission-languages en,es  --permission-note "what is still missing"  --template-credit "Hitch"  --translator es="Name"
 //   --text-language en  --base-language es  --summary "One line for the store"  --repo https://github.com/you/pack
 //   --tag v1.0.0  --app ">=0.1.0"  --mod path/to/mod.json
 //
@@ -67,6 +68,12 @@ const kebab = (s) =>
 const semverOf = (text) => {
   const m = /^\s*v?(\d+)(?:\.(\d+))?(?:\.(\d+))?(?![\d.])/.exec(text ?? "");
   return m ? `${m[1]}.${m[2] ?? "0"}.${m[3] ?? "0"}` : undefined;
+};
+// A YAML scalar: plain when that is safe, otherwise double-quoted (a JSON string is a valid YAML scalar).
+const yamlScalar = (v) => {
+  const s = String(v);
+  const plain = /^[A-Za-z0-9_][A-Za-z0-9 _.,/@()+-]*$/.test(s) && !s.endsWith(" ");
+  return plain && !/^(true|false|yes|no|on|off|null|~)$/i.test(s) ? s : JSON.stringify(s);
 };
 const isTodo = (v) => typeof v === "string" && v.includes(TODO);
 
@@ -158,10 +165,29 @@ const permissionBy = flag("permission-by") ?? existing.permission?.by ?? (grante
 const permissionDate = flag("permission-date") ?? existing.permission?.date ?? modPerm?.date;
 const permissionScope = flag("permission-scope") ?? existing.permission?.scope ?? modPerm?.scope;
 const permissionEvidence = flag("permission-evidence") ?? existing.permission?.evidence;
+// Status and languages are never assumed: `granted` comes from the flag, an existing pack.json or a granted mod.json.
+const permissionStatus =
+  flag("permission-status") ?? existing.permission?.status ?? (granted ? "granted" : modPerm ? "pending" : undefined);
+const permissionLanguages = flag("permission-languages")
+  ? flag("permission-languages").split(",").map((l) => l.trim()).filter(Boolean)
+  : existing.permission?.languages;
+const permissionNote = flag("permission-note") ?? existing.permission?.note;
 if (modPerm && !granted) todo(`mod.json says permission status is "${modPerm.status ?? "none"}": do not submit this pack until it is granted`);
 if (!permissionBy) todo("permission.by: who allows the store to distribute this pack (--permission-by); if you made it yourself, that is you");
 if (!permissionDate) todo("permission.date: YYYY-MM-DD when permission was given (--permission-date)");
 if (!permissionEvidence) todo("permission.evidence: a link or a quoted message showing permission (--permission-evidence); the registry review asks for it");
+if (!permissionStatus) todo("permission.status: --permission-status granted once permission is given (pending until then); packs that are not granted are never approved");
+else if (permissionStatus !== "granted" && permissionStatus !== "pending") todo(`permission.status is "${permissionStatus}": use --permission-status granted or --permission-status pending`);
+else if (permissionStatus === "pending") todo(`permission.status is pending: do not submit this pack until it is granted${permissionNote ? ` (${permissionNote})` : ""}`);
+if (!permissionScope) todo('permission.scope: how far the permission goes, for example "inclusion" or "inclusion and translation" (--permission-scope)');
+{
+  const shipped = languages?.available ?? [];
+  if (!permissionLanguages) todo(`permission.languages: the languages the permission covers (--permission-languages ${shipped.join(",") || "en"}); a translation needs the creator's permission too`);
+  else {
+    const uncovered = shipped.filter((l) => !permissionLanguages.includes(l));
+    if (uncovered.length > 0) todo(`permission.languages does not cover ${uncovered.join(", ")}, which the pack ships: get the creator's permission for them, or remove those pictures`);
+  }
+}
 for (const open of mod?.open ?? []) todo(`open item from mod.json: ${open}`);
 if (mod?.status && mod.status !== "ready") todo(`mod.json status is "${mod.status}"`);
 
@@ -181,7 +207,19 @@ const packJson = {
   ...(languages ? { languages } : {}),
   ...(Object.keys(pictures).length ? { pictures } : {}),
   ...(Object.keys(altArt).length ? { altArt } : {}),
-  ...(permissionBy ? { permission: { by: permissionBy, ...(permissionEvidence ? { evidence: permissionEvidence } : {}), ...(permissionDate ? { date: permissionDate } : {}), ...(permissionScope ? { scope: permissionScope } : {}) } } : {}),
+  ...(permissionBy
+    ? {
+        permission: {
+          ...(permissionStatus ? { status: permissionStatus } : {}),
+          by: permissionBy,
+          ...(permissionDate ? { date: permissionDate } : {}),
+          ...(permissionEvidence ? { evidence: permissionEvidence } : {}),
+          ...(permissionScope ? { scope: permissionScope } : {}),
+          ...(permissionLanguages ? { languages: permissionLanguages } : {}),
+          ...(permissionNote ? { note: permissionNote } : {}),
+        },
+      }
+    : {}),
   ...(templateCredit ? { templateCredit } : {}),
   ...(Object.keys(allTranslators).length ? { translators: allTranslators } : {}),
 };
@@ -212,10 +250,12 @@ const permissionLines = [
     ? `${permissionBy} gives permission for ${name} to be distributed through the mod store.`
     : `${TODO}: who gives permission for ${name} to be distributed through the mod store.`,
   "",
-  `- Status: ${granted ? "granted" : modPerm ? String(modPerm.status ?? "not recorded") : permissionBy ? "granted" : `${TODO}: granted | not granted`}`,
+  `- Status: ${permissionStatus ?? `${TODO}: granted | pending`}`,
   `- Scope: ${permissionScope ?? `${TODO}: for example "inclusion" or "inclusion and translation"`}`,
   `- Date: ${permissionDate ?? `${TODO}: YYYY-MM-DD`}`,
   `- Via: ${permissionEvidence ?? `${TODO}: a link or a quoted message showing it was given`}`,
+  `- Languages: ${permissionLanguages?.join(", ") ?? `${TODO}: the languages it covers (the original and each translation)`}`,
+  ...(permissionNote ? [`- Note: ${permissionNote}`] : []),
   "",
 ];
 const permission = permissionLines.join("\n");
@@ -234,13 +274,13 @@ const registry = [
   `repo: ${flag("repo") ?? (remote || `${TODO}: https://github.com/<you>/<pack-repo>`)}`,
   `tag: ${tag}`,
   `commit: ${commit || `${TODO}: git rev-parse ${tag}^{commit}`}`,
-  `creator: ${creator ?? `${TODO}: creator`}`,
+  `creator: ${creator ? yamlScalar(creator) : `${TODO}: creator`}`,
   "permission:",
-  `  by: ${permissionBy ?? `${TODO}: who granted permission`}`,
-  `  evidence: ${permissionEvidence ?? `${TODO}: a link to where permission was given`}`,
+  `  by: ${permissionBy ? yamlScalar(permissionBy) : `${TODO}: who granted permission`}`,
+  `  evidence: ${permissionEvidence ? yamlScalar(permissionEvidence) : `${TODO}: a link to where permission was given`}`,
   `  date: ${permissionDate ?? `${TODO}: YYYY-MM-DD`}`,
   `tags: [${kind}]`,
-  ...(flag("summary") ? [`summary: ${flag("summary")}`] : []),
+  ...(flag("summary") ? [`summary: ${yamlScalar(flag("summary"))}`] : []),
   "",
 ].join("\n");
 

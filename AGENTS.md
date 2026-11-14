@@ -9,7 +9,8 @@ skills below live in `.agents/`. If the links are missing (or are small text fil
 A **custom content pack** for the [Marvel Champions digital game](https://github.com/quincarter/marvel-champions-digital-game):
 a fan-made hero (later scenarios and modular sets), made of card JSON files, an ability script file and card pictures,
 built and validated with the game's SDK (`@champions-digital-game/mod-sdk`, the `mc-pack` tool). It is submitted to the
-in-game Mod Store through a registry pull request (see `SUBMITTING.md`).
+in-game Mod Store through a registry pull request. `SUBMITTING.md` is the step-by-step guide for the whole path;
+the step numbers below are its steps.
 
 This is a fan-made, non-commercial project. Marvel Champions, its card text, artwork and characters are the intellectual
 property of Fantasy Flight Games and Marvel. Only work on content the creator made or has permission to share.
@@ -50,13 +51,39 @@ cards/<code>.json   -->  abilities/index.ts  (script-card + find-precedent)
 npm run validate  ->  npm run typecheck  ->  npm test        (validate-and-fix runs all three, compactly)
         |
         v
-describe-pack  ->  pack.json, CREDITS.md, PERMISSION.md     then   submit-pack  ->  registry pull request
+describe-pack  ->  pack.json, CREDITS.md, PERMISSION.md, permission block (the creator's facts, never invented)
+        |
+        v
+the creator: push, CI green, tag v<version>  ->  a release carrying <id>-<version>.zip
+        |
+        v
+submit-pack  ->  submission/<id>.yaml  ->  (the creator says go)  ->  registry pull request
 ```
 
-1. Get card JSON into `cards/` (write it, import it, or transcribe it from pictures).
+1. Get card JSON into `cards/` (write it, import it, or transcribe it from pictures). SUBMITTING.md step 4.
 2. Script each ability in `abilities/index.ts`.
-3. `npm run validate`, `npm run typecheck`, `npm test`. Fix until all pass. An unscripted ability is a failure.
-4. Draft the metadata (`npm run describe`), fill the creator's facts, then tag and submit.
+3. `npm run validate`, `npm run typecheck`, `npm test`, `npm run build`. Fix until all pass. An unscripted ability is
+   a failure. Step 5.
+4. Draft the metadata (`npm run describe`) and ask the creator for the facts it lists, including the permission:
+   status, who, date, evidence, scope and languages. Steps 6 and 7.
+5. The creator pushes, waits for green CI and tags `v<version>`; CI's release job attaches the zip. Step 8. Run these
+   commands for them only when they ask you to.
+6. Run the submit-pack skill. It writes the registry file; you open the registry pull request only after the creator
+   confirms. Steps 9 to 11.
+
+### Releasing and submitting: what you may and may not do
+
+- **Permission is the creator's to give.** Ask the creator for the permission facts in one batch: who gave it, when,
+  the evidence (a link, or the quoted message and where it is kept), the scope and the languages it covers. If they
+  did not make the pack, the evidence must come from the person who did. Never write `--permission-status granted`,
+  a date or evidence they did not give you. If they cannot show it, record `pending` with a `note` and stop: the pack
+  is not submitted.
+- **Ask before anything that leaves the machine:** pushing, tagging, forking the registry, pushing a branch to it,
+  opening the pull request. Show the creator the exact file and pull request text first.
+- **Never move a pushed tag or replace a release's zip.** To change anything after a tag, bump `version` and tag
+  again.
+- **Never edit another pack's file in the registry**, approve a pull request, or publish anything: merging is the
+  maintainer's.
 
 Commands (from the repo root):
 
@@ -84,7 +111,7 @@ output when a script summarizes it. Each skill's `SKILL.md` says exactly when to
 | `script-card`                   | Lists unscripted abilities with card text and a suggested builder | Write each script from a precedent; report gaps            |
 | `validate-and-fix`              | Runs validate + typecheck + test; prints one compact issue list with hints | Fix mechanical issues; report DSL gaps and author questions |
 | `describe-pack`                 | `npm run describe --json`; prints facts and TODOs               | Ask the creator for the TODO facts, rerun with flags, proofread |
-| `submit-pack`                   | Checks tag, commit, TODOs, permission, build; prints the registry file | Tell the creator what only they can do; give them the file |
+| `submit-pack`                   | Checks permission, TODOs, tag, release zip, build; writes `submission/<id>.yaml` | Tell the creator what only they can do; with their go-ahead, open the registry pull request |
 
 ## Subagents (`.agents/agents/`)
 
@@ -115,7 +142,7 @@ Small and focused. Use them proactively; each one starts with the matching skill
 | `docs/validation-errors.md`  | Every message `validate`, `typecheck` and `test` print, and the fix.                           |
 | `docs/pack-metadata.md`      | `pack.json`, credits, permission, the registry file, and the `mod.json` mapping.               |
 | `SAMPLE.md`                  | The sample hero: one card of each kind with the base card each script copies.                  |
-| `SUBMITTING.md`              | How to submit to the Mod Store.                                                                |
+| `SUBMITTING.md`              | The step-by-step guide from template to Mod Store, with a checklist and troubleshooting.       |
 
 The game repo (https://github.com/quincarter/marvel-champions-digital-game) is the source of truth for the engine: card
 schema in `packages/content/src/schema/cards/`, the DSL in `packages/cards/src/dsl/`, base-card scripts in
@@ -128,7 +155,8 @@ schema in `packages/content/src/schema/cards/`, the DSL in `packages/cards/src/d
 - A script that names another card writes its exact printed name.
 - Traits are upper case in JSON and in queries.
 - Comments in scripts quote the card text and cite the base card copied; note a ruling or a reading the author chose.
-- Keep `package-lock.json` committed. Tag releases `v<version>` matching `pack.json`.
+- Keep `package-lock.json` committed: CI installs with `npm ci` and fails without it. The SDK is pinned to an exact
+  version; upgrade it only on purpose (README, "Upgrading the SDK"). Tag releases `v<version>` matching `pack.json`.
 - Do not commit `build/`, `.cache/`, `.drafts/` or `submission/` (git-ignored).
 
 ## Agent links on every system

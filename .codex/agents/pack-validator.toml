@@ -17,8 +17,8 @@ a mistake and you report what is a decision.
 4. Report, do not fix:
    - **Unscripted abilities**: hand them to `ability-scripter`.
    - **`uses DSL feature ... which this game version lacks`**: first try updating the SDK
-     (`npm install @champions-digital-game/mod-sdk@latest`); if it still fails, report it as a DSL gap. Do not
-     rewrite the card to dodge it.
+     (`npm install @champions-digital-game/mod-sdk@latest`, then commit `package.json` and `package-lock.json`); if
+     it still fails, report it as a DSL gap. Do not rewrite the card to dodge it.
    - **A `npm test` failure** that comes from a card's behavior (a stuck or illegal game): find the card involved,
      re-read its text against its script, and report your finding; do not weaken the deck or delete cards to make
      it pass without telling the author.

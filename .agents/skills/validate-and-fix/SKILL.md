@@ -31,7 +31,8 @@ Handle the lines by kind, fixing, re-running, until clean:
   recipe in `docs/recipes.md`. Fix the call; do not cast the error away.
 - `[unscripted]`: not a fix. Hand them to the script-card skill.
 - `uses DSL feature ... which this game version lacks`: run `npm install @champions-digital-game/mod-sdk@latest` and
-  re-run; if it persists it is a DSL gap, report it (AGENTS.md).
+  re-run (commit `package.json` and `package-lock.json` with the upgrade); if it persists it is a DSL gap, report it
+  (AGENTS.md).
 - `[game]`: a headless game failed. Find the card involved, re-read its text against its script and report; do not
   delete cards or weaken the deck to pass.
 
